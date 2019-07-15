@@ -67,7 +67,7 @@ def recursive_push(pusher, pushed, grid, vx, vy, add=True):
 	pushed.y += vy
 	x_new = int(pushed.x)
 	y_new = int(pushed.y)
-	# print(pushed, x_new, y_new)
+	print('pushed', x_old, y_old, 'to', x_new, y_new)
 	# print(len(grid[x_new][y_new]))
 	grid[x_old][y_old].remove(pushed)
 	# push all cells bound to pushed
@@ -77,10 +77,12 @@ def recursive_push(pusher, pushed, grid, vx, vy, add=True):
 		# print('cell', cell)
 		grid = recursive_push(pushed, cell, grid, vx, vy, add=False)
 	# push all cells on the grid space where push was moved
+	pushed.prune_bonds()
 	while len(grid[x_new][y_new]) > 0:
 		cell = grid[x_new][y_new][0]
 		grid = recursive_push(pushed, cell, grid, vx, vy)
 	grid[x_new][y_new].append(pushed)
+	pushed.prune_bonds()
 	return grid
 
 
