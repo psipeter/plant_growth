@@ -13,28 +13,35 @@ from matplotlib import animation
 import copy
 
 class Cell():
-	def __init__(self, id, x=0, y=0, vx=0, vy=0, theta=0, to_node=10):
+	def __init__(self, id, x=0, y=0, theta=0):
 		self.id = id
 		self.x = x
 		self.y = y
-		self.vx = vx
-		self.vy = vy
 		self.theta = theta
 		self.to_node = to_node
-		self.cell_type = 'vein' if to_node > 0 else 'node'
+		self.cell_type = 'vein'
+		self.bonds = []
 		self.rng = np.random.RandomState(seed=id)
 
-	def wiggle(self, v=1.0):
-		self.x += self.rng.uniform(0, v) * np.cos(self.rng.uniform(0, 2*np.pi))
-		self.y += self.rng.uniform(0, v) * np.sin(self.rng.uniform(0, 2*np.pi))
+	def reproduce(self, id):
+		angle = self.theta + pdf(self.rng)*(self.cell_type == 'node')
+		offspring = Cell(id=id, x=self.x, y=self.y, theta=angle)
+		offspring.update_to_node(self.to_node-1)
+		offspring.update_cell_type()
+		return offspring
 
-	def reproduce(self, id, vx=0, vy=0):
-		if self.cell_type == 'vein':
-			angle = self.theta
-			return Cell(id=id, x=self.x, y=self.y, vx=np.cos(angle), vy=np.sin(angle), theta=self.theta, to_node=self.to_node-1)
-		elif self.cell_type == 'node':
-			angle = self.theta+pdf(self.rng)
-			return Cell(id=id, x=self.x, y=self.y, vx=np.cos(angle), vy=np.sin(angle), theta=angle)
+	def update_to_node(self, val):
+		self.to_node = np.max([0, val])
+
+	def update_cell_type(self):
+		if self.to_node == 0:
+			self.cell_type = 'node'
+			self.to_node = to_node
+
+	def prune_bonds(self):
+		for bound in self.bonds:
+			if np.abs(self.x - bound.x) > 1 or np.abs(self.y - bound.y) > 1:
+				self.bonds.remove(bound)
 
 def pdf(rng):
 	# rule = {str(0): 1}
@@ -49,39 +56,44 @@ def pdf(rng):
 	assert total <= 1.0
 	return result
 
-def recursive_move(cell, cells, grid):
-	x_old = int(cell.x)
-	y_old = int(cell.y)
-	cell.x += cell.vx
-	cell.y += cell.vy
-	x_new = int(cell.x)
-	y_new = int(cell.y)
-	if x_old != x_new or y_old != y_new:
-		grid[x_old][y_old].remove(cell)
-		grid[x_new][y_new].append(cell)
-		pushed_cells = grid[x_new][y_new]
-		for pushed_cell in pushed_cells:
-			if pushed_cell is not cell:
-				# print(cell.id, cell.x, cell.y, cell.vx, cell.vy)
-				# print('pushes')
-				# print(pushed_cell.id, pushed_cell.x, pushed_cell.y, pushed_cell.vx, pushed_cell.vy)
-				pushed_cell.vx += cell.vx
-				pushed_cell.vy += cell.vy
-				grid = recursive_move(pushed_cell, cells, grid)
-	cell.vx = 0
-	cell.vy = 0
+def recursive_push(pusher, pushed, grid, vx, vy):
+	print('pusher', pusher)
+	print('pushed', pushed)
+	pusher.bonds.append(pushed)
+	x_old = int(pushed.x)
+	y_old = int(pushed.y)
+	pushed.x += vx
+	pushed.y += vy
+	x_new = int(pushed.x)
+	y_new = int(pushed.y)
+	# print(pushed, x_new, y_new)
+	# print(len(grid[x_new][y_new]))
+	grid[x_old][y_old].remove(pushed)
+	# push all cells bound to pushed
+	pushed.prune_bonds()
+	for cell in pushed.bonds:
+		print('pushed', pushed)
+		print('cell', cell)
+		grid = recursive_push(pushed, cell, grid, vx, vy)
+	# push all cells on the grid space where push was moved
+	while len(grid[x_new][y_new]) > 0:
+		cell = grid[x_new][y_new][0]
+		grid = recursive_push(pushed, cell, grid, vx, vy)
+	grid[x_new][y_new].append(pushed)
 	return grid
 
 
 '''main loop'''
 
-t_final = 6
+t_final = 10
 xmax = 100
 ymax = 100
 seed = 0
+p_offspring = 0.5
+to_node = 3
 rng = np.random.RandomState(seed=seed)
 grid0 = [[[] for x in range(xmax)] for y in range(ymax)]
-cell0 = Cell(id=0, x=0, y=ymax/2)
+cell0 = Cell(id=0, x=1, y=ymax/2)
 grid0[int(cell0.x)][int(cell0.y)].append(cell0)
 cells = [cell0]
 grid_history = [copy.deepcopy(grid0)]
@@ -93,35 +105,27 @@ for t in range(t_final):
 	print('t=%s'%t)
 	offsprings = []
 	for cell in cells:
-		if cell.vx > 0 or cell.vy > 0:
-			grid = recursive_move(cell, cells, grid)
-			# cell.move(grid)  # move cell according to velocity and angle
-			# # cell.wiggle()
-			# grid[int(cell.x)][int(cell.y)].append(cell)  # update world grid to account for new position
-			# for pushed_cell in grid[int(cell.x)][int(cell.y)]:  # push cells displaced by move
-			# 	if pushed_cell is not cell:
-			# 		pushed_cell.v += 1
-		if rng.uniform(0, 1) < 1.0:
+		if rng.uniform(0, 1) < p_offspring:
 			idmax += 1
 			offspring = cell.reproduce(idmax)
 			offsprings.append(offspring)
 			grid[int(offspring.x)][int(offspring.y)].append(offspring)
-			# offspring.move(grid)
-			# for pushed_cell in grid[int(offspring.x)][int(offspring.y)]:  # push cells displaced by move
-			# 	if pushed_cell is not offspring:
-			# 		pushed_cell.v += 1
+			grid = recursive_push(cell, offspring, grid,
+				np.cos(offspring.theta), np.sin(offspring.theta))
 	for offspring in offsprings:
 		cells.append(offspring)
 	# rng.shuffle(cells)
 	cell_history.append(copy.deepcopy(cells))
 	grid_history.append(copy.deepcopy(grid))
 	print('n_cells=%s' %len(cells))
+	# print('nonzero grid', np.count_nonzero(np.array(grid)))
+	# print('where nonzero', np.nonzero(np.array(grid)))
 
 # plotting
 def update_plot(i, cell_history, scat):
 	xs = np.array([cell.x for cell in cell_history[i]])
 	ys = np.array([cell.y for cell in cell_history[i]])
-	ss = np.array([1 if cell.cell_type == 'vein' else 10 for cell in cell_history[i]])
+	ss = np.array([3 if cell.cell_type == 'vein' else 10 for cell in cell_history[i]])
 	cs = np.array([0 if cell.cell_type == 'vein' else 1 for cell in cell_history[i]])
 	scat.set_offsets(np.array([xs, ys]).T)
 	scat.set_sizes(ss)
@@ -134,6 +138,6 @@ ax.axis('off')
 xs = np.array([0 for cell in cell_history[-1]])
 ys = np.array([0 for cell in cell_history[-1]])
 scat = ax.scatter(xs, ys)
-anim = animation.FuncAnimation(fig, update_plot, frames=t_final, interval=1, fargs=(cell_history, scat))
+anim = animation.FuncAnimation(fig, update_plot, frames=t_final+1, interval=1, fargs=(cell_history, scat))
 # plt.show()
 anim.save('animation.mp4', fps=5, extra_args=['-vcodec', 'libx264'])
