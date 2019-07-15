@@ -56,10 +56,11 @@ def pdf(rng):
 	assert total <= 1.0
 	return result
 
-def recursive_push(pusher, pushed, grid, vx, vy):
-	print('pusher', pusher)
-	print('pushed', pushed)
-	pusher.bonds.append(pushed)
+def recursive_push(pusher, pushed, grid, vx, vy, add=True):
+	# print('pusher', pusher)
+	# print('pushed', pushed)
+	if add:
+		pusher.bonds.append(pushed)
 	x_old = int(pushed.x)
 	y_old = int(pushed.y)
 	pushed.x += vx
@@ -72,9 +73,9 @@ def recursive_push(pusher, pushed, grid, vx, vy):
 	# push all cells bound to pushed
 	pushed.prune_bonds()
 	for cell in pushed.bonds:
-		print('pushed', pushed)
-		print('cell', cell)
-		grid = recursive_push(pushed, cell, grid, vx, vy)
+		# print('pushed', pushed)
+		# print('cell', cell)
+		grid = recursive_push(pushed, cell, grid, vx, vy, add=False)
 	# push all cells on the grid space where push was moved
 	while len(grid[x_new][y_new]) > 0:
 		cell = grid[x_new][y_new][0]
@@ -85,7 +86,7 @@ def recursive_push(pusher, pushed, grid, vx, vy):
 
 '''main loop'''
 
-t_final = 10
+t_final = 15
 xmax = 100
 ymax = 100
 seed = 0
@@ -121,23 +122,33 @@ for t in range(t_final):
 	# print('nonzero grid', np.count_nonzero(np.array(grid)))
 	# print('where nonzero', np.nonzero(np.array(grid)))
 
-# plotting
-def update_plot(i, cell_history, scat):
-	xs = np.array([cell.x for cell in cell_history[i]])
-	ys = np.array([cell.y for cell in cell_history[i]])
-	ss = np.array([3 if cell.cell_type == 'vein' else 10 for cell in cell_history[i]])
-	cs = np.array([0 if cell.cell_type == 'vein' else 1 for cell in cell_history[i]])
-	scat.set_offsets(np.array([xs, ys]).T)
-	scat.set_sizes(ss)
-	scat.set_array(cs)
-	scat.set(cmap='brg')
-	return scat,
-fig, ax = plt.subplots()
-ax.set(xlim=((0, xmax)), ylim=((0, ymax)))
-ax.axis('off')
-xs = np.array([0 for cell in cell_history[-1]])
-ys = np.array([0 for cell in cell_history[-1]])
-scat = ax.scatter(xs, ys)
-anim = animation.FuncAnimation(fig, update_plot, frames=t_final+1, interval=1, fargs=(cell_history, scat))
-# plt.show()
-anim.save('animation.mp4', fps=5, extra_args=['-vcodec', 'libx264'])
+for t, grid in enumerate(cell_history):
+	fig, ax = plt.subplots()
+	ax.set(xlim=((0, xmax)), ylim=((0, ymax)), title='t=%s'%t)
+	ax.axis('off')
+	xs = np.array([cell.x for cell in grid])
+	ys = np.array([cell.y for cell in grid])
+	ss = np.array([3 if cell.cell_type == 'vein' else 10 for cell in grid])
+	cs = np.array([cell.id/len(cells) if cell.cell_type == 'vein' else 1 for cell in grid])
+	ax.scatter(xs, ys, s=ss, c=cs, cmap='brg')
+	plt.savefig('plots/%s.png'%t)
+	print(t, xs)
+
+# def update_plot(i, cell_history, scat):
+# 	xs = np.array([cell.x for cell in cell_history[i]])
+# 	ys = np.array([cell.y for cell in cell_history[i]])
+# 	ss = np.array([3 if cell.cell_type == 'vein' else 10 for cell in cell_history[i]])
+# 	cs = np.array([cell.id if cell.cell_type == 'vein' else 1 for cell in cell_history[i]]).ravel()
+# 	scat.set_array(cs)
+# 	scat.set_offsets(np.array([xs, ys]).T)
+# 	scat.set_sizes(ss)
+# 	scat.set(cmap='brg')
+# 	return scat,
+# fig, ax = plt.subplots()
+# ax.set(xlim=((0, xmax)), ylim=((0, ymax)))
+# ax.axis('off')
+# xs = np.array([0 for cell in cell_history[-1]])
+# ys = np.array([0 for cell in cell_history[-1]])
+# scat = ax.scatter(xs, ys)
+# anim = animation.FuncAnimation(fig, update_plot, frames=t_final+1, interval=1, fargs=(cell_history, scat))
+# anim.save('animation.mp4', fps=1, extra_args=['-vcodec', 'libx264'])
