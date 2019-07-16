@@ -42,7 +42,8 @@ class Cell():
 
 def pdf(rng):
 	# rule = {str(0): 1}
-	rule = {str(-np.pi/2): 0.5, str(np.pi/2): 0.5}
+	# rule = {str(-np.pi/2): 0.5, str(np.pi/2): 0.5}
+	rule = {str(-np.pi/4): 0.5, str(np.pi/4): 0.5}
 	# rule = {str(-np.pi/2): 0.25, str(0): 0.5, str(np.pi/2): 0.25}
 	sample = rng.uniform(0, 1)
 	total = 0
@@ -67,11 +68,12 @@ def recursive_push(pushed, vx, vy):
 
 
 '''main'''
-t_final = 20
+t_final = 15
 seed = 0
 p_reproduce_vein = 0.5
 p_reproduce_node = 1.0
-node_spacing = 4
+node_spacing = 5
+cell_width = 0.5
 rng = np.random.RandomState(seed=seed)
 node0 = Cell(ID=0, x=0, y=0)  # inactive node (not in cells)
 node0.cell_type = 'node'
@@ -91,29 +93,26 @@ for t in range(t_final):
 	sys.setrecursionlimit(np.max([1000, 2*len(cells)]))
 	cells_new = []
 	for cell in cells:
-		# find distance to nearest node, maybe become a node
 		cell.update_d_node()
 		cell.update_cell_type()
 		# reproduce
-		if rng.uniform(0, 1) < cell.p_reproduce:
+		if cell.rng.uniform(0, 1) < cell.p_reproduce:
 			IDmax += 1
 			child = Cell(ID=IDmax, x=cell.x, y=cell.y, theta=cell.theta+pdf(cell.rng)*(cell.cell_type == 'node'))
-			cells_new.append(child)
-			cell.children.append(child)
-			child.parent = cell
-			vx, vy = int(np.cos(child.theta)), int(np.sin(child.theta))  # todo: non-right angles
+			vx, vy = np.cos(child.theta), np.sin(child.theta)
 			child.x += vx
 			child.y += vy
 			# push cells in offspring spawn point away
 			for pushed in cell.children:
-				if pushed is child:
-					continue
-				if pushed.x == child.x and pushed.y == child.y:
+				if np.sqrt((pushed.x-child.x)**2 + (pushed.y-child.y)**2) < cell_width:
 					cell.children.remove(pushed)
 					child.children.append(pushed)
 					pushed.parent = child
 					recursive_push(pushed, vx, vy)					
-			# update child.d_node
+			child.parent = cell
+			cell.children.append(child)
+			cells_new.append(child)
+			# update distance to nearest node
 			child.update_d_node()
 			child.update_cell_type()
 			cell.update_d_node()
@@ -153,12 +152,12 @@ for t in range(t_final):
 	gridsize = 1+np.max([np.max(xs[t]), np.max(ys[t])])
 	# sizes = np.array([np.sqrt(gridsize) if ct == 'vein' else 5*np.sqrt(gridsize) for ct in cell_types[t]])
 	shapes = np.array(["o" if ct == 'vein' else "D" for ct in cell_types[t]])
-	colors = np.array(IDs[t])/IDmax
+	colors = np.array(IDs[t])/IDmax   # color=cm.rainbow(colors), ax=ax
 	colors = np.array(['k' if ct == 'vein' else 'r' for ct in cell_types[t]])
 	fig, ax = plt.subplots(figsize=((16, 16)))
 	ax.set(xlim=((-1, gridsize)), ylim=((-gridsize/2, gridsize/2)), title='t=%s'%t)
 	ax.axis('off')
-	mscatter(xs[t], ys[t], m=shapes, c=colors)  # color=cm.rainbow(colors), ax=ax
+	mscatter(xs[t], ys[t], m=shapes, c=colors) 
 	# ax.scatter(xs[t], ys[t], s=sizes, marker=shapes, color=cm.rainbow(colors))
 	ax.scatter(node0.x, node0.y, c='r', marker="D")
 	plt.savefig('plots/%s.png'%t)
