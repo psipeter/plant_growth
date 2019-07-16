@@ -21,7 +21,12 @@ class Cell():
 		self.theta = theta
 		self.to_node = to_node  # todo: 2-way communication to ensure even spacing
 		self.cell_type = 'vein'
+		self.parent = []
 		self.children = []
+		self.up = None
+		self.down = None
+		self.left = None
+		self.right = None
 		self.rng = np.random.RandomState(seed=id)
 
 	def update_to_node(self, val):
@@ -45,31 +50,51 @@ def pdf(rng):
 	assert total <= 1.0
 	return result
 
-def recursive_push(pusher, pushed, vx, vy):
+def recursive_push(pushed, vx, vy):
 	x_old = pushed.x
 	y_old = pushed.y
 	pushed.x += vx
 	pushed.y += vy
+	grid[x_old][y_old].remove(pushed)
 	x_new = pushed.x
 	y_new = pushed.y
-	grid[x_old][y_old].remove(pushed)
-	grid[x_new][y_new].append(pushed)
-	to_push = []
 	for cell in pushed.children:
-		to_push.append(cell)
-	for cell in grid[x_new][y_new]:
-		if cell not in to_push and cell is not pushed:
-			to_push.append(cell)
-	for cell in to_push:
-		recursive_push(pushed, cell, vx, vy)
+		recursive_push(cell, vx, vy)
+	grid[x_new][y_new].append(pushed)
 
+
+# def recursive_push(pusher, pushed, children, vx, vy):
+# 	x_old = pushed.x
+# 	y_old = pushed.y
+# 	pushed.x += vx
+# 	pushed.y += vy
+# 	grid[x_old][y_old].remove(pushed)
+# 	x_new = pushed.x
+# 	y_new = pushed.y
+
+# 	for cell in grid[x_new][y_new]:
+# 		children.append(cell)
+# 		new_children = recursive_push(pushed, cell, copy.deepcopy(cell.children), vx, vy)
+# 	grid[x_new][y_new].append(pushed)
+# 	pushed.parent.append(pusher)
+
+# 	for cell in grid[x_new][y_new]:
+# 		pushed.children.append(cell)
+# 		if cell in pusher.children:
+# 			pusher.children.remove(cell)
+# 	# print(pushed.children)
+# 	for cell in pushed.children:
+# 		recursive_push(pushed, cell, vx, vy)
+# 	grid[x_new][y_new].append(pushed)
+# 	pushed.parent.append(pusher)
+# 	pusher.children.append(pushed)
 
 '''main loop'''
 t_final = 7
 xmax = 100
 ymax = 100
 seed = 0
-p_offspring = 1.0
+p_child = 1.0
 to_node = 3
 rng = np.random.RandomState(seed=seed)
 grid0 = [[[] for x in range(xmax)] for y in range(ymax)]
@@ -82,26 +107,27 @@ grid = grid0
 idmax = 0
 for t in range(t_final):
 	print('t=%s'%(t+1))
-	offsprings = []
+	children = []
 	for cell in cells:
-		if rng.uniform(0, 1) < p_offspring:
+		if rng.uniform(0, 1) < p_child:
 			idmax += 1
-			offspring = Cell(id=idmax, x=cell.x, y=cell.y, theta=cell.theta+pdf(cell.rng)*(cell.cell_type == 'node'))
-			offspring.update_to_node(cell.to_node-1)
-			offspring.update_cell_type()
-			grid[offspring.x][offspring.y].append(offspring)
-			vx, vy = int(np.cos(offspring.theta)), int(np.sin(offspring.theta))
-			recursive_push(cell, offspring, vx, vy)
-			for child in cell.children:
-				if child.x == offspring.x and child.y == offspring.y:
-					cell.children.remove(child)
-				if np.abs(cell.x - child.x) > 1 or np.abs(cell.y - child.y) > 1:
-					cell.children.remove(child)
-			cell.children.append(offspring)
-			print(len(cell.children))
-			offsprings.append(offspring)
-	for offspring in offsprings:
-		cells.append(offspring)
+			child = Cell(id=idmax, x=cell.x, y=cell.y, theta=cell.theta+pdf(cell.rng)*(cell.cell_type == 'node'))
+			child.update_to_node(cell.to_node-1)
+			child.update_cell_type()
+			children.append(child)
+			cell.children.append(child)
+			vx, vy = int(np.cos(child.theta)), int(np.sin(child.theta))  # todo: non-right angles
+			child.x += vx
+			child.y += vy
+			for pushed in grid[child.x][child.y]:
+				cell.children.remove(pushed)  # try block?
+				child.children.append(pushed)
+				pushed.parent.append(child)
+				recursive_push(pushed, vx, vy)
+			grid[child.x][child.y].append(child)
+			# recursive_push(cell, child, vx, vy)
+	for child in children:
+		cells.append(child)
 	# rng.shuffle(cells)
 	cell_history.append(copy.deepcopy(cells))
 	grid_history.append(copy.deepcopy(grid))
