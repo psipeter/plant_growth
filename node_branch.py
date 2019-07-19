@@ -24,21 +24,50 @@ class Cell():
 		self.children = []
 		self.rng = np.random.RandomState(seed=ID)
 
-	def update_d_node(self):
+	def query_parent(self):
 		if self.cell_type == 'node2':
 			self.d_node = 0
-			return
-		d_node_min = np.min([self.d_node, self.parent.d_node])
+			return 0
+		d_nodes = [self.d_node, self.parent.query_parent()+1]
+		self.d_node = np.min(d_nodes)
+		return self.d_node
+
+	def query_children(self):
+		if self.cell_type == 'node2':
+			self.d_node = 0
+			return 0
+		d_nodes = [self.d_node]
 		for child in self.children:
-			d_node_min = np.min([d_node_min, child.d_node])
-		self.d_node = int(d_node_min + 1)
+			d_nodes.append(child.query_children()+1)
+		self.d_node = np.min(d_nodes)
+		return self.d_node
+
+	def diffuse_parent(self, val):
+		if val >= self.d_node:
+			return
+		else:
+			self.parent.diffuse_parent(val+1)
+		self.d_node = val
+
+	def diffuse_children(self, val):
+		if val >= self.d_node:
+			return
+		else:
+			for child in self.children:
+				child.diffuse_children(val+1)
+		self.d_node = val		
 
 	def update_cell_type(self):
-		if self.d_node == node_spacing:
+		if node_spacing < self.d_node < 1e10:
 			self.cell_type = 'node2'
 			self.d_node = 0	
-			self.p_reproduce = p_reproduce_node	
-		# print(self.d_node == node_spacing)
+			self.p_reproduce = p_reproduce_node
+			self.diffuse_parent(1)
+			self.diffuse_children(1)
+		# else:
+		# 	self.cell_type = 'vein'
+		# 	self.d_node = np.inf	
+		# 	self.p_reproduce = p_reproduce_vein	
 
 def pdf(rule, rng):
 	sample = rng.uniform(0, 1)
@@ -59,6 +88,7 @@ def reproduce(parent):
 		IDmax += 1
 		child.x += np.cos(child.theta)
 		child.y += np.sin(child.theta)
+		child.parent = parent
 		children.append(child)
 		parent.p_reproduce *= reproduce_decay
 	if parent.cell_type == 'node':
@@ -67,6 +97,7 @@ def reproduce(parent):
 		IDmax += 1
 		child.x += np.cos(child.theta)
 		child.y += np.sin(child.theta)
+		child.parent = parent
 		children.append(child)
 		parent.p_reproduce *= reproduce_decay
 	if parent.cell_type == 'node2':
@@ -75,11 +106,13 @@ def reproduce(parent):
 		IDmax += 1
 		child.x += np.cos(child.theta)
 		child.y += np.sin(child.theta)
+		child.parent = parent
 		children.append(child)
 		child2 = Cell(ID=IDmax, x=parent.x, y=parent.y, theta=parent.theta-angle)
 		IDmax += 1
 		child2.x += np.cos(child2.theta)
 		child2.y += np.sin(child2.theta)
+		child2.parent = parent
 		children.append(child2)
 		parent.p_reproduce *= reproduce_decay
 	return children
@@ -91,18 +124,19 @@ def recursive_push(pushed, vx, vy):
 	pushed.y += vy
 	x_new = pushed.x
 	y_new = pushed.y
+	pushed.d_node += 1
 	for cell in pushed.children:
 		recursive_push(cell, vx, vy)
-	pushed.update_d_node()
-	pushed.update_cell_type()
+	pushed.query_parent()
+	pushed.query_children()
 
 
 '''main'''
-t_final = 12
+t_final = 10
 seed = 0
 p_reproduce_vein = 0.8
 p_reproduce_node = 1.0
-node_spacing = 5
+node_spacing = 4
 cell_width = 0.5
 reproduce_decay = 0.5
 angle_rules = {
@@ -129,28 +163,24 @@ for t in range(t_final):
 	sys.setrecursionlimit(np.max([1000, 2*len(cells)]))
 	cells_new = []
 	for cell in cells:
-		cell.update_d_node()
+		cell.query_parent()
+		cell.query_children()
 		cell.update_cell_type()
 		# reproduce
 		if cell.rng.uniform(0, 1) < cell.p_reproduce:
 			children = reproduce(cell)
+			# print('cell', cell.ID, 'births', [child.ID for child in children])
 			for child in children:
 				for pushed in cell.children:
 					if np.sqrt((pushed.x-child.x)**2 + (pushed.y-child.y)**2) < cell_width:
 						cell.children.remove(pushed)
 						child.children.append(pushed)
 						pushed.parent = child
-						recursive_push(pushed, child.x-cell.x, child.y-cell.y)					
-				child.parent = cell
+						recursive_push(pushed, child.x-cell.x, child.y-cell.y)
+				child.query_parent()
+				child.query_children()
 				cell.children.append(child)
 				cells_new.append(child)
-				# update distance to nearest node
-				child.update_d_node()
-				child.update_cell_type()
-				cell.update_d_node()
-				cell.update_cell_type()
-				child.update_d_node()
-				child.update_cell_type()
 	for new in cells_new:
 		cells.append(new)
 	rng.shuffle(cells)
@@ -159,6 +189,7 @@ for t in range(t_final):
 		ys[t].append(cell.y)
 		cts[t].append(cell.cell_type)
 		IDs[t].append(cell.ID)
+		# print(cell.ID, '(', cell.x, cell.y, ')', cell.d_node)
 
 # to pass list of markers as an argument to scatter
 # https://github.com/matplotlib/matplotlib/issues/11155
@@ -187,8 +218,8 @@ for t in range(t_final):
 	colors = np.array(['k' if ct == 'vein' else 'r' for ct in cts[t]])
 	fig, ax = plt.subplots(figsize=((16, 16)))
 	ax.set(xlim=((0, gridsize)), ylim=((-gridsize/2, gridsize/2)),
-		xticks=[0, gridsize], yticks=[-gridsize/2, gridsize/2], title='t=%s'%t)
+		xticks=[0, gridsize], yticks=[-gridsize/2, gridsize/2], title='t=%s'%(t+1))
 	mscatter(xs[t], ys[t], m=shapes, c=colors) 
 	# ax.scatter(xs[t], ys[t], s=sizes, marker=shapes, color=cm.rainbow(colors))
 	ax.scatter(node0.x, node0.y, c='r', marker="D")
-	plt.savefig('plots/%s.png'%t)
+	plt.savefig('plots/%s.png'%(t+1))
