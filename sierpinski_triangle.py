@@ -71,7 +71,6 @@ def reproduce(parent):
 	return children
 
 def recursive_push(pushed, vx, vy):
-	print('pushing')
 	x_old = pushed.x
 	y_old = pushed.y
 	pushed.x += vx
@@ -86,7 +85,7 @@ def recursive_push(pushed, vx, vy):
 
 '''main'''
 
-t_final = 9
+t_final = 12
 seed = 0
 cell_width = 0.5
 angle_rules = {
@@ -104,15 +103,16 @@ IDs = [[] for t in range(1+t_final)]
 cell0 = Cell(ID=0, x=0, y=0)
 cell0.cell_type = 'left'
 cell0.d_left = 0
-cell0.d_right = 2
+cell0.d_right = 1
 cell0.theta = -np.pi/3
-cell1 = Cell(ID=1, x=1, y=0)
+cell1 = Cell(ID=1, x=0, y=0)
 cell1.cell_type = 'left'
 cell1.d_left = 0
-cell1.d_right = 3
-cell1.theta = 0
+cell1.d_right = 2
+cell1.theta = -np.pi/3
 cell1.parent = cell0
-IDmax = 1
+cell1.reproduce_countdown = 0
+IDmax = 2
 cells = [cell1]
 lines[0].append([(cell0.x, cell0.y), (cell1.x, cell1.y)])
 for cell in cells:
@@ -127,12 +127,12 @@ for t in np.arange(1, t_final):
 	print('\nt=%s'%(t), 'n_cells=%s' %len(cells))
 	cells_new = []
 	for cell in cells:
-		cell.update_cell_type()
+		# cell.update_cell_type()
 		if cell.reproduce_countdown == 0:
 			# print(cell.ID, cell.d_left, cell.d_right, cell.cell_type)
 			children = reproduce(cell)
-			cell.reproduce_countdown = 7
-			# print('cell', cell.ID, 'births', [child.ID for child in children])
+			cell.reproduce_countdown = 8
+			print('cell', cell.ID, 'births', [child.ID for child in children])
 			for child in children:
 				# print(child.ID, child.d_left, child.d_right, child.cell_type)
 				for pushed in cell.children:
