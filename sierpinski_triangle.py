@@ -19,9 +19,7 @@ class Cell():
 		self.y = y
 		self.theta = theta
 		self.d_left = np.inf
-		self.d_left2 = np.inf
 		self.d_right = np.inf
-		self.d_right2 = np.inf
 		self.reproduce_countdown = 0
 		self.cell_type = 'straight'
 		self.parent = None
@@ -29,18 +27,20 @@ class Cell():
 		self.rng = np.random.RandomState(seed=ID)
 
 	def update_cell_type(self):
-		if self.d_left2 == 1 and self.d_left != 2:
-			self.cell_type = 'left'
-			self.d_left = 0
-		elif self.d_left == 2:
-			self.cell_type = 'left2'
-			self.d_left2 = 0
-		elif self.d_left2 == 1 and self.d_left == 2:
-			self.cell_type == 'right'
-		if self.d_right < self.d_left or self.d_left == 5:
+		if self.parent.cell_type == 'left':
+			if self.d_right != 5 and self.d_right != 0:
+				self.cell_type = 'left'
+				self.d_left = 0
+		elif self.parent.cell_type == 'right':
+			if self.d_left != 5 and self.d_left != 0:
+				self.cell_type = 'right'
+				self.d_right = 0
+		if self.d_right == 5:
 			self.cell_type = 'right'
 			self.d_right = 0
-
+		elif self.d_left == 5:
+			self.cell_type = 'left'
+			self.d_left = 0
 
 def pdf(rule, rng):
 	sample = rng.uniform(0, 1)
@@ -56,12 +56,8 @@ def reproduce(parent):
 	children = []
 	if parent.cell_type == 'left':
 		angle = parent.theta + pdf(angle_rules['left'], parent.rng)
-	elif parent.cell_type == 'left2':
-		angle = parent.theta + pdf(angle_rules['left2'], parent.rng)
 	elif parent.cell_type == 'right':
 		angle = parent.theta + pdf(angle_rules['right'], parent.rng)
-	elif parent.cell_type == 'right2':
-		angle = parent.theta + pdf(angle_rules['right2'], parent.rng)
 	global IDmax
 	IDmax += 1
 	child = Cell(ID=IDmax, x=parent.x, y=parent.y, theta=angle)
@@ -69,13 +65,13 @@ def reproduce(parent):
 	child.y += np.sin(child.theta)
 	child.parent = parent
 	child.d_left = parent.d_left + 1
-	child.d_left2 = parent.d_left2 + 1
 	child.d_right = parent.d_right + 1
-	child.d_right2 = parent.d_right2 + 1
+	child.update_cell_type()
 	children.append(child)
 	return children
 
 def recursive_push(pushed, vx, vy):
+	print('pushing')
 	x_old = pushed.x
 	y_old = pushed.y
 	pushed.x += vx
@@ -90,14 +86,12 @@ def recursive_push(pushed, vx, vy):
 
 '''main'''
 
-t_final = 4
+t_final = 9
 seed = 0
 cell_width = 0.5
 angle_rules = {
-	'left': {str(np.pi/4): 1},
-	'left2': {str(np.pi/2): 1},
-	'right': {str(-np.pi/4): 1},
-	'right2': {str(-np.pi/2): 1},
+	'left': {str(np.pi/3): 1},
+	'right': {str(-np.pi/3): 1},
 	}
 rng = np.random.RandomState(seed=seed)
 lines = [[] for t in range(1+t_final)]
@@ -110,12 +104,17 @@ IDs = [[] for t in range(1+t_final)]
 cell0 = Cell(ID=0, x=0, y=0)
 cell0.cell_type = 'left'
 cell0.d_left = 0
-cell0.d_left2 = 1
-cell0.d_right2 = 2
-cell0.d_right = 3
-cell0.theta = -np.pi/4
-IDmax = 0
-cells = [cell0]
+cell0.d_right = 2
+cell0.theta = -np.pi/3
+cell1 = Cell(ID=1, x=1, y=0)
+cell1.cell_type = 'left'
+cell1.d_left = 0
+cell1.d_right = 3
+cell1.theta = 0
+cell1.parent = cell0
+IDmax = 1
+cells = [cell1]
+lines[0].append([(cell0.x, cell0.y), (cell1.x, cell1.y)])
 for cell in cells:
 	for child in cell.children:
 		lines[0].append([(cell.x, cell.y), (child.x, child.y)])
@@ -126,29 +125,31 @@ for cell in cells:
 
 for t in np.arange(1, t_final):
 	print('\nt=%s'%(t), 'n_cells=%s' %len(cells))
-	sys.setrecursionlimit(np.max([1000, 2*len(cells)]))
 	cells_new = []
 	for cell in cells:
 		cell.update_cell_type()
 		if cell.reproduce_countdown == 0:
+			# print(cell.ID, cell.d_left, cell.d_right, cell.cell_type)
 			children = reproduce(cell)
-			cell.reproduce_countdown = 5
+			cell.reproduce_countdown = 7
 			# print('cell', cell.ID, 'births', [child.ID for child in children])
 			for child in children:
-				# print(child.ID, '(', child.x, child.y, ')', child.d_node)
+				# print(child.ID, child.d_left, child.d_right, child.cell_type)
 				for pushed in cell.children:
 					if np.sqrt((pushed.x-child.x)**2 + (pushed.y-child.y)**2) < cell_width:
 						cell.children.remove(pushed)
 						child.children.append(pushed)
 						pushed.parent = child
 						recursive_push(pushed, child.x-cell.x, child.y-cell.y)
-				child.update_cell_type()
 				cell.children.append(child)
 				cells_new.append(child)
+		else:
+			cell.reproduce_countdown -= 1
 	for new in cells_new:
 		cells.append(new)
 	rng.shuffle(cells)
 	for cell in cells:
+		lines[t].append([(cell0.x, cell0.y), (cell1.x, cell1.y)])
 		for child in cell.children:
 			lines[t].append([(cell.x, cell.y), (child.x, child.y)])
 		xs[t].append(cell.x)
@@ -163,7 +164,7 @@ for t in range(t_final):
 	ax.set(xlim=((-gridsize, gridsize)), ylim=((-gridsize, gridsize)), title='t=%s'%(t))
 	lc = mc.LineCollection(lines[t], colors='k')
 	ax.add_collection(lc)
-	if t < 5:
-		colors = np.array(['k' if ct == 'straight' else 'r' for ct in cts[t]])
+	if t < 10:
+		colors = np.array(['r' if ct == 'left' else 'b' for ct in cts[t]])
 		ax.scatter(xs[t], ys[t], c=colors) 
 	plt.savefig('plots/sierpinski_triangle/%s.png'%(t))	
