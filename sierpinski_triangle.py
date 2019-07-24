@@ -74,9 +74,38 @@ def recursive_push(pusher, pushed, angle, direction):
 		if pushed.R is not None:
 			recursive_push(pushed, pushed.R, angle, direction)
 
+def plot_timeseries(plot=True):
+	if not plot:
+		return
+	global t_steps
+	alllines = []
+	allxs = []
+	allys = []
+	for cell in cells:
+		alllines.append([(cell.x1, cell.y1), (cell.x2, cell.y2)])
+		allxs.append(cell.x1)
+		allxs.append(cell.x2)
+		allys.append(cell.y1)
+		allys.append(cell.y2)
+	for new in cells_new:
+		alllines.append([(new.x1, new.y1), (new.x2, new.y2)])
+		allxs.append(new.x1)
+		allxs.append(new.x2)
+		allys.append(new.y1)
+		allys.append(new.y2)				
+	gridsize = 1+np.max([np.max(allxs), np.max(allys)])
+	fig, ax = plt.subplots(figsize=((16, 16)))
+	ax.set(xlim=((-gridsize, gridsize)), ylim=((-gridsize, gridsize)), title='t=%s'%t_steps)
+	lc = mc.LineCollection(alllines, colors='k')
+	ax.add_collection(lc)
+	plt.axis('off')
+	plt.savefig('plots/sierpinski_triangle/timeseries/%s.png'%t_steps)
+	plt.close('all')	
+	t_steps += 1
+
 '''main'''
 
-t_final = 8
+t_final = 6
 seed = 0
 angle_rules = {
 	'A': [np.pi/3, -np.pi/3],
@@ -102,6 +131,10 @@ for cell in cells:
 	ys[0].append(cell0.y2)
 	cts[0].append(cell.cell_type)
 	IDs[0].append(cell.ID)
+cells_new = []
+t_steps = 0
+plot_timeseries()
+
 
 for t in np.arange(1, t_final):
 	print('\nt=%s'%(t), 'n_cells=%s' %len(cells))
@@ -111,6 +144,7 @@ for t in np.arange(1, t_final):
 		child_L, child_R, IDmax = reproduce(cell, IDmax)
 		cells_new.append(child_L)
 		cells_new.append(child_R)
+		plot_timeseries()
 	for new in cells_new:
 		cells.append(new)
 	rng.shuffle(cells)
