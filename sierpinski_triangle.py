@@ -69,7 +69,7 @@ def recursive_push(pusher, pushed, angle, direction):
 		if pushed.R is not None:
 			recursive_push(pushed, pushed.R, angle, direction)
 
-def plot_timeseries(plot=True):
+def plot_timeseries(plot=False):
 	if not plot:
 		return
 	global t_steps
@@ -106,14 +106,16 @@ def update_lists(t):
 def update_plots(t):
 	global lines, xs, ys, cts, IDs
 	fig, ax = plt.subplots(figsize=((16, 16)))
-	gridsize = np.max([np.max(xs[t])+1, np.max(ys[t])+1])
-	ax.set(xlim=((-gridsize, gridsize)), ylim=((-gridsize, gridsize)), title='t=%s'%(t))
+	# gridsize = np.max([np.max(xs[t]), np.max(ys[t])])
+	# gridsize = np.max(np.abs(ys[t]))
+	gridsize = 1 + 2**t
+	ax.set(xlim=((-gridsize/2, gridsize/2)), ylim=((0, gridsize)), title='t=%s'%(t))
 	lc = mc.LineCollection(lines[t], colors='k')
 	ax.add_collection(lc)
 	plt.savefig('plots/sierpinski_triangle/%s.png'%(t))	
 
 # model parameters
-t_final = 8
+t_final = 9
 seed = 0
 rng = np.random.RandomState(seed=seed)
 angle_rules = {
@@ -122,7 +124,7 @@ angle_rules = {
 	}
 
 # initial conditions
-cell0 = Cell(ID=0, x1=-0.5, x2=0.5, y1=0, y2=0, angle1=np.pi, angle2=0)
+cell0 = Cell(ID=0, x1=-0.5, x2=0.5, y1=1, y2=1, angle1=np.pi, angle2=0)
 cell0.cell_type = 'A'
 cells = [cell0]
 IDmax = 1
